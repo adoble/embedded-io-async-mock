@@ -19,7 +19,7 @@ impl MockSerialAsync {
 
     /// Assert that all expectations on a given mock have been consumed.
     pub fn done(&self) {
-        todo!()
+        assert!(self.transactions.is_empty());
     }
 }
 
@@ -34,24 +34,6 @@ impl embedded_io_async::Read for MockSerialAsync {
             None => panic!("Transaction read_many not expected",),
         }
     }
-
-    async fn read_exact(
-        &mut self,
-        mut buf: &mut [u8],
-    ) -> Result<(), embedded_io_async::ReadExactError<Self::Error>> {
-        while !buf.is_empty() {
-            match self.read(buf).await {
-                Ok(0) => break,
-                Ok(n) => buf = &mut buf[n..],
-                Err(e) => return Err(embedded_io_async::ReadExactError::Other(e)),
-            }
-        }
-        if buf.is_empty() {
-            Ok(())
-        } else {
-            Err(embedded_io_async::ReadExactError::UnexpectedEof)
-        }
-    }
 }
 
 impl embedded_io_async::Write for MockSerialAsync {
@@ -61,7 +43,11 @@ impl embedded_io_async::Write for MockSerialAsync {
     }
 
     async fn flush(&mut self) -> Result<(), Self::Error> {
-        todo!()
+        match self.transactions.pop_front() {
+            Some(SerialTransaction::Flush) => Ok(()),
+            Some(other_transaction) => panic!("Expected flush, got {}", other_transaction),
+            None => panic!("Transaction flush not expected",),
+        }
     }
 }
 
@@ -72,15 +58,28 @@ impl embedded_io::ErrorType for MockSerialAsync {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum SerialTransaction {
+    Write(u8),
     WriteMany(Vec<u8>),
     Flush,
-    Read(Vec<u8>),
+    Read(u8),
     ReadMany(Vec<u8>),
 }
 
 impl SerialTransaction {
-    pub fn read_many(expectation: &[u8]) -> Self {
-        SerialTransaction::ReadMany(Vec::from(expectation))
+    pub fn read(expected: u8) -> Self {
+        SerialTransaction::Read(expected)
+    }
+
+    pub fn read_many(expectated: &[u8]) -> Self {
+        SerialTransaction::ReadMany(Vec::from(expectated))
+    }
+
+    pub fn write(expected: u8) -> Self {
+        SerialTransaction::Write(expected)
+    }
+
+    pub fn write_many(expected: &[u8]) -> Self {
+        SerialTransaction::WriteMany(Vec::from(expected))
     }
 
     pub fn flush() -> Self {
@@ -91,11 +90,11 @@ impl SerialTransaction {
 impl std::fmt::Display for SerialTransaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let transaction_type = match self {
-            SerialTransaction::WriteMany(_items) => "write_many".to_string(),
-
-            SerialTransaction::Flush => "flush".to_string(),
-            SerialTransaction::Read(_items) => "read".to_string(),
-            SerialTransaction::ReadMany(_items) => "read_many".to_string(),
+            Self::Write(_byte) => "write".to_string(),
+            Self::Flush => "flush".to_string(),
+            Self::WriteMany(_items) => "write_many".to_string(),
+            Self::Read(_byte) => "read".to_string(),
+            Self::ReadMany(_items) => "read_many".to_string(),
         };
 
         write!(f, "{}", transaction_type)
