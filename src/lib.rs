@@ -5,18 +5,18 @@ use std::{collections::VecDeque, os::unix::thread};
 use embedded_io::{Error, ErrorKind, ErrorType};
 use embedded_io_async::{Read, Write};
 
-pub struct MockSerialAsync {
+pub struct Mock {
     // transactions: Vec<SerialTransaction>,
     // current_transaction_index: usize,
-    transactions: VecDeque<SerialTransaction>,
+    transactions: VecDeque<Transaction>,
     all_consumed: bool,
     transactions_aborted: bool,
 }
 
-impl MockSerialAsync {
-    pub fn new(expected_transactions: &[SerialTransaction]) -> Self {
+impl Mock {
+    pub fn new(expected_transactions: &[Transaction]) -> Self {
         let transactions = VecDeque::from(expected_transactions.to_owned());
-        MockSerialAsync {
+        Mock {
             transactions,
             all_consumed: false,
             transactions_aborted: false,
@@ -33,10 +33,10 @@ impl MockSerialAsync {
     }
 }
 
-impl embedded_io_async::Read for MockSerialAsync {
+impl embedded_io_async::Read for Mock {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         match self.transactions.pop_front() {
-            Some(SerialTransaction::Read(data)) => {
+            Some(Transaction::Read(data)) => {
                 buf.copy_from_slice(&data);
                 Ok(data.len() as usize)
             }
@@ -52,10 +52,10 @@ impl embedded_io_async::Read for MockSerialAsync {
     }
 }
 
-impl embedded_io_async::Write for MockSerialAsync {
+impl embedded_io_async::Write for Mock {
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         match self.transactions.pop_front() {
-            Some(SerialTransaction::Write(data)) => {
+            Some(Transaction::Write(data)) => {
                 assert_eq!(data.as_slice(), buf);
                 Ok(buf.len())
             }
@@ -72,7 +72,7 @@ impl embedded_io_async::Write for MockSerialAsync {
 
     async fn flush(&mut self) -> Result<(), Self::Error> {
         match self.transactions.pop_front() {
-            Some(SerialTransaction::Flush) => Ok(()),
+            Some(Transaction::Flush) => Ok(()),
             Some(other_transaction) => {
                 self.transactions_aborted = true;
                 panic!("Expected flush, got {}", other_transaction)
@@ -85,7 +85,7 @@ impl embedded_io_async::Write for MockSerialAsync {
     }
 }
 
-impl Drop for MockSerialAsync {
+impl Drop for Mock {
     fn drop(&mut self) {
         if !self.all_consumed && !self.transactions_aborted && !std::thread::panicking() {
             panic!("MockSerialAsync::done was not called before it went out of scope");
@@ -93,33 +93,33 @@ impl Drop for MockSerialAsync {
     }
 }
 
-impl embedded_io::ErrorType for MockSerialAsync {
+impl embedded_io::ErrorType for Mock {
     // type Error = MockSerialError;
     type Error = embedded_io::ErrorKind;
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum SerialTransaction {
+pub enum Transaction {
     Write(Vec<u8>),
     Flush,
     Read(Vec<u8>),
 }
 
-impl SerialTransaction {
+impl Transaction {
     pub fn read(expected: &[u8]) -> Self {
-        SerialTransaction::Read(Vec::from(expected))
+        Transaction::Read(Vec::from(expected))
     }
 
     pub fn write(expected: &[u8]) -> Self {
-        SerialTransaction::Write(Vec::from(expected))
+        Transaction::Write(Vec::from(expected))
     }
 
     pub fn flush() -> Self {
-        SerialTransaction::Flush
+        Transaction::Flush
     }
 }
 
-impl std::fmt::Display for SerialTransaction {
+impl std::fmt::Display for Transaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let transaction_type = match self {
             Self::Flush => "flush".to_string(),
