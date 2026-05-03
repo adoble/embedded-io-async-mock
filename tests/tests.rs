@@ -102,6 +102,30 @@ async fn test_not_all_transactions_consumed() {
 
 #[tokio::test]
 #[should_panic]
+async fn test_false_transaction() {
+    let expectations = [
+        SerialTransaction::write(b"abcd"),
+        SerialTransaction::flush(),
+        SerialTransaction::write(b"efgh"),
+        SerialTransaction::flush(),
+    ];
+
+    let mut serial = MockSerialAsync::new(&expectations);
+
+    let _ = serial.write(b"abcd").await.expect("Write error");
+    serial.flush().await.expect("Flush error");
+    let mut buf = [0 as u8; 4];
+
+    // False transaction
+    let _ = serial.read(&mut buf).await.unwrap();
+
+    serial.flush().await.expect("Flush error");
+
+    serial.done();
+}
+
+#[tokio::test]
+#[should_panic]
 async fn test_unexpected_data_on_write() {
     let expectations = [SerialTransaction::write(b"abcd")];
 

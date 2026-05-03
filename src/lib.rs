@@ -26,7 +26,10 @@ impl MockSerialAsync {
     /// Assert that all expectations on a given mock have been consumed.
     pub fn done(&mut self) {
         self.all_consumed = self.transactions.is_empty();
-        assert!(self.all_consumed);
+        assert!(
+            self.all_consumed,
+            "All transactions have not been consumed."
+        );
     }
 }
 
@@ -120,8 +123,8 @@ impl std::fmt::Display for SerialTransaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let transaction_type = match self {
             Self::Flush => "flush".to_string(),
-            Self::Write(_items) => "write_many".to_string(),
-            Self::Read(_items) => "read_many".to_string(),
+            Self::Write(_items) => "write".to_string(),
+            Self::Read(_items) => "read".to_string(),
         };
 
         write!(f, "{}", transaction_type)
