@@ -97,4 +97,15 @@ async fn test_not_all_transactions_consumed() {
 
     serial.done();
 }
-// TODO False transactions
+
+#[tokio::test]
+#[should_panic]
+async fn test_unexpected_data_on_write() {
+    let expectations = [SerialTransaction::write(b"abcd")];
+
+    let mut serial = MockSerialAsync::new(&expectations);
+
+    let _ = serial.write(b"abxd").await.expect("Write error");
+
+    serial.done();
+}
