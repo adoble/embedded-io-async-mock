@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 /// A mock for serial communication using the embedded-io-async traits Read and Write.
 use std::vec::Vec;
 
@@ -5,20 +6,15 @@ use embedded_io::{Error, ErrorKind, ErrorType};
 use embedded_io_async::{Read, Write};
 
 pub struct MockSerialAsync {
-    // rx: heapless::Vec<u8, 128>,
-    // tx: heapless::Vec<u8, 128>,
-    transactions: Vec<SerialTransaction>,
-    current_transaction_index: usize,
+    // transactions: Vec<SerialTransaction>,
+    // current_transaction_index: usize,
+    transactions: VecDeque<SerialTransaction>,
 }
 
 impl MockSerialAsync {
     pub fn new(expected_transactions: &[SerialTransaction]) -> Self {
-        let transactions = expected_transactions.to_vec();
-        let current_transaction_index: usize = 0;
-        MockSerialAsync {
-            transactions,
-            current_transaction_index,
-        }
+        let transactions = VecDeque::from(expected_transactions.to_owned());
+        MockSerialAsync { transactions }
     }
 
     /// Assert that all expectations on a given mock have been consumed.
@@ -29,16 +25,12 @@ impl MockSerialAsync {
 
 impl embedded_io_async::Read for MockSerialAsync {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        match self.transactions.get(self.current_transaction_index) {
+        match self.transactions.pop_front() {
             Some(SerialTransaction::ReadMany(data)) => {
-                buf.copy_from_slice(data);
-                self.current_transaction_index += 1;
+                buf.copy_from_slice(&data);
                 Ok(data.len() as usize)
             }
-            Some(other_transaction) => panic!(
-                "Expected {}, got {}",
-                self.transactions[self.current_transaction_index], other_transaction
-            ),
+            Some(other_transaction) => panic!("Expected read_many, got {}", other_transaction),
             None => panic!("Transaction read_many not expected",),
         }
     }
