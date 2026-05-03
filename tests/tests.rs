@@ -95,6 +95,8 @@ async fn test_not_all_transactions_consumed() {
 
     let _ = serial.write(b"efgh").await.expect("Write error");
 
+    // flush missing
+
     serial.done();
 }
 
@@ -109,3 +111,13 @@ async fn test_unexpected_data_on_write() {
 
     serial.done();
 }
+
+// #[tokio::test]
+// #[should_panic]
+// async fn test_no_done_function_called() {
+//     let expectations = [SerialTransaction::write(b"abcd")];
+
+//     let mut serial = MockSerialAsync::new(&expectations);
+
+//     let _ = serial.write(b"abcd").await.expect("Write error");
+// }

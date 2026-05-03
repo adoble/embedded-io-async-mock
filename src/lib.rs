@@ -1,6 +1,6 @@
-use std::collections::VecDeque;
 /// A mock for serial communication using the embedded-io-async traits Read and Write.
 use std::vec::Vec;
+use std::{collections::VecDeque, os::unix::thread};
 
 use embedded_io::{Error, ErrorKind, ErrorType};
 use embedded_io_async::{Read, Write};
@@ -9,17 +9,24 @@ pub struct MockSerialAsync {
     // transactions: Vec<SerialTransaction>,
     // current_transaction_index: usize,
     transactions: VecDeque<SerialTransaction>,
+    all_consumed: bool,
+    transactions_aborted: bool,
 }
 
 impl MockSerialAsync {
     pub fn new(expected_transactions: &[SerialTransaction]) -> Self {
         let transactions = VecDeque::from(expected_transactions.to_owned());
-        MockSerialAsync { transactions }
+        MockSerialAsync {
+            transactions,
+            all_consumed: false,
+            transactions_aborted: false,
+        }
     }
 
     /// Assert that all expectations on a given mock have been consumed.
-    pub fn done(&self) {
-        assert!(self.transactions.is_empty());
+    pub fn done(&mut self) {
+        self.all_consumed = self.transactions.is_empty();
+        assert!(self.all_consumed);
     }
 }
 
@@ -30,8 +37,14 @@ impl embedded_io_async::Read for MockSerialAsync {
                 buf.copy_from_slice(&data);
                 Ok(data.len() as usize)
             }
-            Some(other_transaction) => panic!("Expected read, got {}", other_transaction),
-            None => panic!("Transaction read not expected",),
+            Some(other_transaction) => {
+                self.transactions_aborted = true;
+                panic!("Expected read, got {}", other_transaction);
+            }
+            None => {
+                self.transactions_aborted = true;
+                panic!("Transaction read not expected")
+            }
         }
     }
 }
@@ -43,16 +56,36 @@ impl embedded_io_async::Write for MockSerialAsync {
                 assert_eq!(data.as_slice(), buf);
                 Ok(buf.len())
             }
-            Some(other_transaction) => panic!("Expected write, got {}", other_transaction),
-            None => panic!("Transaction write not expected",),
+            Some(other_transaction) => {
+                self.transactions_aborted = true;
+                panic!("Expected write, got {}", other_transaction)
+            }
+            None => {
+                self.transactions_aborted = true;
+                panic!("Transaction write not expected",)
+            }
         }
     }
 
     async fn flush(&mut self) -> Result<(), Self::Error> {
         match self.transactions.pop_front() {
             Some(SerialTransaction::Flush) => Ok(()),
-            Some(other_transaction) => panic!("Expected flush, got {}", other_transaction),
-            None => panic!("Transaction flush not expected",),
+            Some(other_transaction) => {
+                self.transactions_aborted = true;
+                panic!("Expected flush, got {}", other_transaction)
+            }
+            None => {
+                self.transactions_aborted = true;
+                panic!("Transaction flush not expected",)
+            }
+        }
+    }
+}
+
+impl Drop for MockSerialAsync {
+    fn drop(&mut self) {
+        if !self.all_consumed && !self.transactions_aborted && !std::thread::panicking() {
+            panic!("MockSerialAsync::done was not called before it went out of scope");
         }
     }
 }
@@ -111,21 +144,3 @@ impl std::fmt::Display for SerialTransaction {
 //         }
 //     }
 // }
-
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_new() {
-        let expectations = [SerialTransaction::read(b"abcd"), SerialTransaction::Flush];
-
-        let serial = MockSerialAsync::new(&expectations);
-
-        assert_eq!(
-            SerialTransaction::Read(b"abcd".to_vec()),
-            serial.transactions[0]
-        );
-
-        assert_eq!(SerialTransaction::Flush, serial.transactions[1]);
-    }
-}
