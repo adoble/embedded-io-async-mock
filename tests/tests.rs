@@ -16,7 +16,8 @@ async fn test_read_many_transaction() {
     assert_eq!(4, n);
     assert_eq!(b"abcd", &buf);
 
-    //serial.flush();
+    let r = serial.flush().await;
+    assert!(r.is_ok());
 
-    //serial.done();
+    serial.done();
 }
