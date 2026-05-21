@@ -1,4 +1,8 @@
 /// A mock for serial communication using the embedded-io-async traits Read and Write.
+///
+// TODO Change the name of the crate to embedded-io-async-mock
+// TODO Add some module documentation here including examples
+// TODO Check the formatting of the error meesages againt embedded-hal-mock
 use std::vec::Vec;
 use std::{collections::VecDeque, os::unix::thread};
 
