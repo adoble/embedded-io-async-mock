@@ -1,1 +1,7 @@
 /target
+/debug
+
+
+# Cargo.lock files should not be managed by git in libraries 
+Cargo.lock
+
