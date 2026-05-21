@@ -1,5 +1,5 @@
 use embedded_io_async::{Read, Write};
-use mock_serial_async::{Mock as SerialAsyncMock, Transaction as SerialTransaction};
+use embedded_io_async_mock::{Mock as SerialAsyncMock, Transaction as SerialTransaction};
 
 #[tokio::test]
 async fn test_read_transaction() {

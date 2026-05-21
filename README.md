@@ -1,4 +1,4 @@
-# mock-serial-async
+# embedded-io-async-mock
 
 A small mock serial communication helper using `embedded-io` and `embedded-io-async`.
 
@@ -15,7 +15,7 @@ It attempts to provide the missing async serial functionality [embedded-hal-mock
 ## Example
 
 ```rust
-use mock_serial_async::{Mock as SerialAsyncMock, Transaction as SerialTransaction};
+use embedded-io-async-mock::{Mock as SerialAsyncMock, Transaction as SerialTransaction};
 
 let expectations = [
         SerialTransaction::write(b"VOL;"),
