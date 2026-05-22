@@ -56,6 +56,9 @@ impl embedded_io_async::Read for Mock {
                 }
                 Ok(n)
             }
+            Some(Transaction::WriteMany(_data)) => {
+                todo!()
+            }
             Some(other_transaction) => {
                 self.transactions_aborted = true;
                 panic!("Expected read, got {}", other_transaction);
@@ -117,6 +120,7 @@ impl embedded_io::ErrorType for Mock {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Transaction {
     Write(Vec<u8>),
+    WriteMany(Vec<u8>),
     Flush,
     Read(Vec<u8>),
     ReadMany(Vec<u8>),
@@ -135,6 +139,10 @@ impl Transaction {
         Transaction::ReadMany(Vec::from(expected))
     }
 
+    pub fn write_many(expected: &[u8]) -> Self {
+        Transaction::WriteMany(Vec::from(expected))
+    }
+
     pub fn flush() -> Self {
         Transaction::Flush
     }
@@ -147,6 +155,7 @@ impl std::fmt::Display for Transaction {
             Self::Write(_items) => "write".to_string(),
             Self::Read(_items) => "read".to_string(),
             Self::ReadMany(_items) => "read_many".to_string(),
+            Self::WriteMany(_items) => "write_many".to_string(),
         };
 
         write!(f, "{}", transaction_type)

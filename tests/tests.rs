@@ -215,3 +215,16 @@ async fn test_read_many_but_not_enough_data() {
 
     serial.done();
 }
+
+#[tokio::test]
+async fn test_write_many() {
+    let expectations = [SerialTransaction::write_many(b"VOL:42;")];
+
+    let mut serial = SerialAsyncMock::new(&expectations);
+
+    let mut n = serial.write(b"VOL:").await.expect("Write error");
+    assert_eq!(n, 4);
+
+    n = serial.write(b"42;").await.expect("Write error");
+    assert_eq!(n, 3);
+}
