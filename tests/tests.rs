@@ -154,3 +154,64 @@ async fn test_readme_example() {
 
     serial.done();
 }
+
+#[tokio::test]
+async fn test_simple_read_many() {
+    let expectations = [
+        SerialTransaction::read_many(b"VOL:42;"),
+        SerialTransaction::flush(),
+    ];
+
+    let mut serial = SerialAsyncMock::new(&expectations);
+
+    let mut buf = [0u8; 4];
+    let n = serial.read(&mut buf).await.expect("Read error");
+    assert_eq!(n, 4);
+    assert_eq!(&buf, b"VOL:");
+
+    let mut buf = [0u8; 3];
+    let n = serial.read(&mut buf).await.expect("Read error");
+    assert_eq!(n, 3);
+    assert_eq!(&buf, b"42;");
+
+    assert!(serial.flush().await.is_ok());
+
+    serial.done();
+}
+
+#[tokio::test]
+async fn test_read_many_no_transaction_boundary() {
+    let expectations = [SerialTransaction::read_many(b"VOL:42;")];
+
+    let mut serial = SerialAsyncMock::new(&expectations);
+    let mut buf = [0u8; 4];
+    let n = serial.read(&mut buf).await.expect("Read error");
+    assert_eq!(n, 4);
+    assert_eq!(&buf, b"VOL:");
+
+    let mut buf = [0u8; 3];
+    let n = serial.read(&mut buf).await.expect("Read error");
+    assert_eq!(n, 3);
+    assert_eq!(&buf, b"42;");
+
+    serial.done();
+}
+
+#[tokio::test]
+async fn test_read_many_but_not_enough_data() {
+    let expectations = [SerialTransaction::read_many(b"VOL:;")];
+
+    let mut serial = SerialAsyncMock::new(&expectations);
+
+    let mut buf = [0u8; 4];
+    let n = serial.read(&mut buf).await.expect("Read error");
+    assert_eq!(n, 4);
+    assert_eq!(&buf, b"VOL:");
+
+    let mut buf = [0u8; 3];
+    let n = serial.read(&mut buf).await.expect("Read error");
+    assert_eq!(n, 1);
+    assert_eq!(&buf, &[b';', 0, 0]);
+
+    serial.done();
+}

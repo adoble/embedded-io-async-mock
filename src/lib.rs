@@ -11,6 +11,8 @@ pub struct Mock {
     transactions: VecDeque<Transaction>,
     all_consumed: bool,
     transactions_aborted: bool,
+
+    read_index: usize,
 }
 
 impl Mock {
@@ -20,6 +22,7 @@ impl Mock {
             transactions,
             all_consumed: false,
             transactions_aborted: false,
+            read_index: 0,
         }
     }
 
@@ -39,6 +42,19 @@ impl embedded_io_async::Read for Mock {
             Some(Transaction::Read(data)) => {
                 buf.copy_from_slice(&data);
                 Ok(data.len())
+            }
+            Some(Transaction::ReadMany(data)) => {
+                let available = data.len().saturating_sub(self.read_index);
+                let n = buf.len().min(available);
+                buf[..n].copy_from_slice(&data[self.read_index..self.read_index + n]);
+
+                self.read_index += n;
+
+                // If not finished reading, push the ReadMany transaction back onto the stack
+                if self.read_index < data.len() {
+                    self.transactions.push_front(Transaction::ReadMany(data));
+                }
+                Ok(n)
             }
             Some(other_transaction) => {
                 self.transactions_aborted = true;
@@ -103,6 +119,7 @@ pub enum Transaction {
     Write(Vec<u8>),
     Flush,
     Read(Vec<u8>),
+    ReadMany(Vec<u8>),
 }
 
 impl Transaction {
@@ -112,6 +129,10 @@ impl Transaction {
 
     pub fn write(expected: &[u8]) -> Self {
         Transaction::Write(Vec::from(expected))
+    }
+
+    pub fn read_many(expected: &[u8]) -> Self {
+        Transaction::ReadMany(Vec::from(expected))
     }
 
     pub fn flush() -> Self {
@@ -125,6 +146,7 @@ impl std::fmt::Display for Transaction {
             Self::Flush => "flush".to_string(),
             Self::Write(_items) => "write".to_string(),
             Self::Read(_items) => "read".to_string(),
+            Self::ReadMany(_items) => "read_many".to_string(),
         };
 
         write!(f, "{}", transaction_type)
