@@ -238,7 +238,7 @@ async fn test_write_many_with_differing_data() {
 
     let mut serial = SerialAsyncMock::new(&expectations);
 
-    let mut n = serial.write(b"VOL:").await.expect("Write error");
+    let n = serial.write(b"VOL:").await.expect("Write error");
     assert_eq!(n, 4);
 
     serial
@@ -263,7 +263,7 @@ async fn test_write_many_with_too_little_data() {
 
     // Write too litle data
     serial
-        .write(b";")
+        .write(b"42")
         .await
         .expect("Write error with too little data");
     serial.flush().await.expect("Flush error");
@@ -300,6 +300,31 @@ async fn test_write_many_with_too_much_data() {
     assert_eq!(n, 4);
     n = serial.write(b"VOL:4222").await.expect("Write error");
     assert_eq!(n, 8);
+
+    serial.done();
+}
+
+#[tokio::test]
+async fn test_write_many_no_data_specified() {
+    let expectations = [
+        SerialTransaction::write_many(b""),
+        SerialTransaction::flush(),
+    ];
+
+    let mut serial = SerialAsyncMock::new(&expectations);
+
+    let buf = [0u8; 0];
+    let n = serial.write(&buf).await.expect("Write zero data error");
+    assert_eq!(n, 0);
+
+    serial.flush().await.expect("Flush error");
+    serial.done();
+}
+
+#[tokio::test]
+async fn test_no_transactions() {
+    let empty_expectations: [SerialTransaction; 0] = [];
+    let mut serial = SerialAsyncMock::new(&empty_expectations);
 
     serial.done();
 }

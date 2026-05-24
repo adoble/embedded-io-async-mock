@@ -13,6 +13,7 @@ pub struct Mock {
     transactions_aborted: bool,
 
     read_index: usize,
+    write_index: usize,
 }
 
 impl Mock {
@@ -23,6 +24,7 @@ impl Mock {
             all_consumed: false,
             transactions_aborted: false,
             read_index: 0,
+            write_index: 0,
         }
     }
 
@@ -56,9 +58,7 @@ impl embedded_io_async::Read for Mock {
                 }
                 Ok(n)
             }
-            Some(Transaction::WriteMany(_data)) => {
-                todo!()
-            }
+
             Some(other_transaction) => {
                 self.transactions_aborted = true;
                 panic!("Expected read, got {}", other_transaction);
@@ -78,6 +78,26 @@ impl embedded_io_async::Write for Mock {
                 assert_eq!(data.as_slice(), buf);
                 Ok(buf.len())
             }
+            Some(Transaction::WriteMany(data)) => {
+                assert!(
+                    self.write_index + buf.len() <= data.len(),
+                    "write_many: expected to write {} bytes, instead writing {} bytes",
+                    data.len(),
+                    self.write_index + buf.len()
+                );
+                assert_eq!(
+                    data[self.write_index..(self.write_index + buf.len())],
+                    buf[..],
+                    "Expected and written bytes differ"
+                );
+                self.write_index += buf.len();
+                // If not finished writing, push the WriteMany transaction back onto the stack
+                if self.write_index < data.len() {
+                    self.transactions.push_front(Transaction::WriteMany(data));
+                }
+                Ok(buf.len())
+            }
+
             Some(other_transaction) => {
                 self.transactions_aborted = true;
                 panic!("Expected write, got {}", other_transaction)
@@ -126,19 +146,79 @@ pub enum Transaction {
     ReadMany(Vec<u8>),
 }
 
+/// A async serial transaction
+///
+/// Transactions can either be reads, writes, or flushes. A collection of transactions represent
+/// the expected async operations that are performed on a serial device.
 impl Transaction {
+    /// Use to test for a call to `read``.
     pub fn read(expected: &[u8]) -> Self {
         Transaction::Read(Vec::from(expected))
     }
 
+    /// Use to test for a call to `write``.
     pub fn write(expected: &[u8]) -> Self {
         Transaction::Write(Vec::from(expected))
     }
 
+    /// Instead of specifing a transaction for each `read`` call , use `read_many` to batch them together.
+    ///
+    //
+    /// ```
+    /// use embedded_io_async::{Read, Write};
+    /// use embedded_io_async_mock::{Mock as SerialAsyncMock, Transaction as SerialTransaction};
+    ///
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
+    ///
+    /// let expectations = [
+    ///     SerialTransaction::read_many(b"VOL:42;"),
+    ///     SerialTransaction::flush(),
+    /// ];
+    ///
+    /// let mut serial = SerialAsyncMock::new(&expectations);
+    ///
+    /// let mut buf = [0u8; 4];
+    /// let n = serial.read(&mut buf).await.expect("Read error");
+    /// assert_eq!(n, 4);
+    /// assert_eq!(&buf, b"VOL:");
+    ///
+    /// let mut buf = [0u8; 3];
+    /// let n = serial.read(&mut buf).await.expect("Read error");
+    /// assert_eq!(n, 3);
+    /// assert_eq!(&buf, b"42;");
+    ///
+    /// assert!(serial.flush().await.is_ok());
+    ///
+    /// serial.done();
+    /// # }
+    /// ```
     pub fn read_many(expected: &[u8]) -> Self {
         Transaction::ReadMany(Vec::from(expected))
     }
 
+    /// Instead of specifing a transaction for each `write`` call , use `write_many` to batch them together.
+    /// ```
+    ///
+    /// use embedded_io_async::{Read, Write};
+    /// use embedded_io_async_mock::{Mock as SerialAsyncMock, Transaction as SerialTransaction};
+    ///
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
+    /// let expectations = [SerialTransaction::write_many(b"VOL:42;")];
+    ///
+    /// let mut serial = SerialAsyncMock::new(&expectations);
+    ///
+    /// let mut n = serial.write(b"VOL:").await.expect("Write error");
+    /// assert_eq!(n, 4);
+    ///
+    /// n = serial.write(b"42;").await.expect("Write error");
+    /// assert_eq!(n, 3);
+    ///
+    /// serial.done();
+    /// # }
+    /// ```
+    ///
     pub fn write_many(expected: &[u8]) -> Self {
         Transaction::WriteMany(Vec::from(expected))
     }
