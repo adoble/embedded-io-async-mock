@@ -1,13 +1,52 @@
+//! A small mock serial communication helper using `embedded-io-async`.
+//!
+//! This crate provides an asynchronous mock serial peripheral that can be used in tests to verify expected read/write/flush transactions.
+//!
+//! It attempts to provide the missing async serial functionality in [embedded-hal-mock](https://docs.rs/embedded-hal-mock/0.11.1/embedded_hal_mock/index.html).
+//! As such, it orientates itself around the API, but differs in some respects.
+//!
+//! ## Features
+//!
+//! - [Mock] records expected serial transactions.
+//! - Supports `Read` and `Write` semantics from `embedded-io-async`.
+//! - Useful for unit testing async serial drivers.
+//!
+//! ## Example
+//!
+//! ```rust
+//! use embedded_io_async_mock::{Mock as SerialAsyncMock, Transaction as SerialTransaction};
+//! use embedded_io_async::{Read, Write};
+//!
+//! # #[tokio::main(flavor = "current_thread")]
+//! # async fn main() {
+//!     let expectations = [
+//!         SerialTransaction::write(b"VOL;"),
+//!         SerialTransaction::flush(),
+//!         SerialTransaction::read(b"42"),
+//!     ];
+//!
+//!     let mut serial = SerialAsyncMock::new(&expectations);
+//!
+//!     assert!(serial.write(b"VOL;").await.is_ok());
+//!     assert!(serial.flush().await.is_ok());
+//!
+//!     let mut buf = [0 as u8; 2];
+//!     assert!(serial.read(&mut buf).await.is_ok());
+//!
+//!     serial.done();
+//! # }
+//! ```
+
 use std::collections::VecDeque;
-/// A mock for serial communication using the embedded-io-async traits Read and Write.
-///
-// TODO Add some module documentation here including examples
-// TODO Check the formatting of the error meesages againt embedded-hal-mock
 use std::vec::Vec;
+// TODO
+// [ ] Check the formatting of the error messages against embedded-hal-mock
+// [ ] Add badges to the README.
+
+/// A mock for serial communication using the `embedded-io-async` traits Read and Write.
+///
 
 pub struct Mock {
-    // transactions: Vec<SerialTransaction>,
-    // current_transaction_index: usize,
     transactions: VecDeque<Transaction>,
     all_consumed: bool,
     transactions_aborted: bool,
@@ -17,6 +56,7 @@ pub struct Mock {
 }
 
 impl Mock {
+    /// Create a serial mock that will expect the provided transactions
     pub fn new(expected_transactions: &[Transaction]) -> Self {
         let transactions = VecDeque::from(expected_transactions.to_owned());
         Mock {
@@ -137,6 +177,12 @@ impl embedded_io::ErrorType for Mock {
     type Error = embedded_io::ErrorKind;
 }
 
+/// A async serial transaction
+///
+/// Transactions can either be reads, writes, or flushes. A collection of transactions represent
+/// the expected async operations that are performed on a serial device.
+///
+/// Instead of using the variants driectly, it is advised to use the implemented functions.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Transaction {
     Write(Vec<u8>),
@@ -146,22 +192,19 @@ pub enum Transaction {
     ReadMany(Vec<u8>),
 }
 
-/// A async serial transaction
-///
-/// Transactions can either be reads, writes, or flushes. A collection of transactions represent
-/// the expected async operations that are performed on a serial device.
 impl Transaction {
-    /// Use to test for a call to `read``.
+    /// Expect serial read that returns the expected bytes.
     pub fn read(expected: &[u8]) -> Self {
         Transaction::Read(Vec::from(expected))
     }
 
-    /// Use to test for a call to `write``.
+    /// Expect a serial write that transmits the expected bytes.
     pub fn write(expected: &[u8]) -> Self {
         Transaction::Write(Vec::from(expected))
     }
 
-    /// Instead of specifing a transaction for each `read`` call , use `read_many` to batch them together.
+    /// Expect one of more serial reads after one another.  
+    /// This avoids specifing a transaction for each `read`` call.
     ///
     //
     /// ```
@@ -197,7 +240,8 @@ impl Transaction {
         Transaction::ReadMany(Vec::from(expected))
     }
 
-    /// Instead of specifing a transaction for each `write`` call , use `write_many` to batch them together.
+    /// Expect one of more serial writes after one another.
+    /// This avoids specifing a transaction for each `write` call.
     /// ```
     ///
     /// use embedded_io_async::{Read, Write};
@@ -223,6 +267,7 @@ impl Transaction {
         Transaction::WriteMany(Vec::from(expected))
     }
 
+    /// Expect a serial flush to clear the serial buffers
     pub fn flush() -> Self {
         Transaction::Flush
     }

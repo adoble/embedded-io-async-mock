@@ -2,6 +2,7 @@
 name = "embedded-io-async-mock"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 
 [dependencies]
 embedded-io = "0.7.1"
