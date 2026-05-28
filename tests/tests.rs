@@ -217,6 +217,22 @@ async fn test_read_many_but_not_enough_data() {
 }
 
 #[tokio::test]
+#[should_panic]
+async fn test_unexpected_read() {
+    let expectations = [SerialTransaction::read(b"abcd")];
+
+    let mut serial = SerialAsyncMock::new(&expectations);
+
+    let mut buf = [0u8; 4];
+    serial.read(&mut buf).await.expect("Read error");
+
+    // Unexpected read should panic
+    serial.read(&mut buf).await.expect("Read error");
+
+    serial.done();
+}
+
+#[tokio::test]
 async fn test_write_many() {
     let expectations = [SerialTransaction::write_many(b"VOL:42;")];
 
@@ -322,9 +338,83 @@ async fn test_write_many_no_data_specified() {
 }
 
 #[tokio::test]
+#[should_panic]
+async fn test_unexpected_transaction_instead_of_write() {
+    let expectations = [SerialTransaction::read(b"r"), SerialTransaction::flush()];
+
+    let mut serial = SerialAsyncMock::new(&expectations);
+
+    // Unexpected write
+    let buf = [0u8; 0];
+    serial.write(&buf).await.expect("Unexpected write");
+
+    serial.done();
+}
+
+#[tokio::test]
+#[should_panic]
+async fn test_no_more_write_transactions_expected() {
+    let expectations = [
+        SerialTransaction::read(b"read1"),
+        SerialTransaction::read(b"read2"),
+    ];
+
+    let mut serial = SerialAsyncMock::new(&expectations);
+
+    // Unexpected write
+    let mut buf = [0u8; 5];
+    serial.read(&mut buf).await.unwrap();
+    serial.read(&mut buf).await.unwrap();
+
+    // One transaction too many
+    serial.write(&mut buf).await.unwrap();
+
+    serial.done();
+}
+
+#[tokio::test]
+#[should_panic]
+async fn test_no_more_flush_transactions_expected() {
+    let expectations = [
+        SerialTransaction::read(b"read1"),
+        SerialTransaction::read(b"read2"),
+    ];
+
+    let mut serial = SerialAsyncMock::new(&expectations);
+
+    // Unexpected write
+    let mut buf = [0u8; 5];
+    serial.read(&mut buf).await.unwrap();
+    serial.read(&mut buf).await.unwrap();
+
+    // One transaction too many
+    serial.flush().await.unwrap();
+
+    serial.done();
+}
+
+#[tokio::test]
 async fn test_no_transactions() {
     let empty_expectations: [SerialTransaction; 0] = [];
     let mut serial = SerialAsyncMock::new(&empty_expectations);
 
     serial.done();
+}
+
+#[tokio::test]
+#[should_panic]
+async fn test_done_not_called() {
+    let expectations = [
+        SerialTransaction::read(b"read1"),
+        SerialTransaction::read(b"read2"),
+    ];
+
+    let mut serial = SerialAsyncMock::new(&expectations);
+
+    let mut buf = [0; 5];
+    serial.read(&mut buf).await.unwrap();
+    serial.read(&mut buf).await.unwrap();
+
+    // Done NOT called
+    // serial.done();
 }

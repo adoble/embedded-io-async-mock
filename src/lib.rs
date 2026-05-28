@@ -287,20 +287,3 @@ impl std::fmt::Display for Transaction {
         write!(f, "{}", transaction_type)
     }
 }
-
-// // #[derive(Debug)]
-// #[derive(Debug)]
-// pub enum MockSerialError {
-//     BufferEmpty,
-//     // Add other variants as needed
-// }
-
-// impl std::error::Error for MockSerialError {}
-
-// impl embedded_io::Error for MockSerialError {
-//     fn kind(&self) -> embedded_io::ErrorKind {
-//         match self {
-//             MockSerialError::BufferEmpty => embedded_io_async::ErrorKind::Other,
-//         }
-//     }
-// }
