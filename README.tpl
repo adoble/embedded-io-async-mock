@@ -15,6 +15,11 @@ embedded-io-async = "0.7.0"
 mock-serial-async = "{{version}}"
 ```
 
+## Alternatives
+- [mock-embedded-io](https://crates.io/crates/mock-embedded-io)
+  This provides a mock for `embedded-io` and `embedded-io-async`, but does not have a
+  similar API to `embedded-hal-mock`
+
 # License
 
 {{license}}

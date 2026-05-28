@@ -36,6 +36,7 @@
 //!     serial.done();
 //! # }
 //! ```
+//!
 
 use std::collections::VecDeque;
 use std::vec::Vec;
